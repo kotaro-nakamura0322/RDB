@@ -1,0 +1,96 @@
+-- 新しい科目
+INSERT INTO subjects (id, name, teacher) VALUES
+  (101, '情報科学', '田中');
+
+-- 新しい生徒
+INSERT INTO students (id, name, age, grade) VALUES
+  (201, '佐藤 健', 17, '2年');
+
+-- 成績データ（新生徒 × 既存科目 + 新科目 × 既存生徒）
+INSERT INTO grades (student_id, subject_id, score) VALUES
+  (201, 101, 88),
+  (201, 1,   75),
+  (1,   101, 92);
+
+
+2クエリ
+
+(1) 全生徒の名前と平均点を、平均点の高い順に
+sql
+SELECT
+  s.name                    AS 生徒名,
+  ROUND(AVG(g.score), 1)    AS 平均点
+FROM students s
+JOIN grades   g ON g.student_id = s.id
+GROUP BY s.id, s.name
+ORDER BY 平均点 DESC;
+
+
+(2) 科目ごとの最高点と、その点数を取った生徒の名前
+sql
+-- 方法A: ウィンドウ関数
+
+SELECT 科目名, 最高点, 生徒名
+FROM (
+  SELECT
+    sub.name AS 科目名,
+    g.score  AS 最高点,
+    st.name  AS 生徒名,
+    RANK() OVER (PARTITION BY sub.id ORDER BY g.score DESC) AS rnk
+  FROM grades   g
+  JOIN subjects sub ON sub.id = g.subject_id
+  JOIN students st  ON st.id  = g.student_id
+)
+WHERE rnk = 1
+ORDER BY 科目名;
+
+
+-- 方法B: 相関サブクエリ
+
+SELECT
+  sub.name AS 科目名,
+  g.score  AS 最高点,
+  st.name  AS 生徒名
+FROM grades   g
+JOIN subjects sub ON sub.id = g.subject_id
+JOIN students st  ON st.id  = g.student_id
+WHERE g.score = (
+  SELECT MAX(g2.score) FROM grades g2 WHERE g2.subject_id = g.subject_id
+)
+ORDER BY 科目名;
+
+
+(3) 前期の科目だけを対象に、単位数と科目名
+sql
+SELECT
+  name     AS 科目名,
+  credits  AS 単位数,
+  department AS 学科
+FROM courses
+WHERE semester = '前期'
+ORDER BY credits DESC, name;
+
+
+３.次の質問に答えてください
+
+ELECT と WHERE の役割
+SELECT	結果としてどの列を出すか（射影）	縦（列）
+WHERE	どの行を残すか（選択・フィルタ）	横（行）
+
+
+GROUP BY を使う主な目的
+
+行を指定した列の値ごとにまとめて1行に集約し、グループ単位で集計関数（COUNT / SUM / AVG / MAX / MIN）を適用するため。上の (1) なら「生徒ごと」に成績行を束ねて平均を出しています。GROUP BY 無しの集計関数は全行が1グループ扱いになる
+
+
+
+JOIN の種類と違い
+種類	挙動	使いどころ
+INNER JOIN	両テーブルで条件が一致した行だけ返す	使いどころ：成績が存在する生徒だけ見たい
+LEFT (OUTER) JOIN	左は全行残し、右が無ければ NULL	使いどころ：成績未登録の生徒も一覧に出したい
+RIGHT / FULL OUTER JOIN	左右が逆／両側全部残す	
+CROSS JOIN	全組み合わせ（直積）	使いどころ：全生徒 × 全科目のマス目を作り、未受験を炙り出す
+自己結合 (self join)	同一テーブル同士	使いどころ：同じ科目の生徒同士を比較する
+
+
+
